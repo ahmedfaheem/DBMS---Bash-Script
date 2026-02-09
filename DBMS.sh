@@ -76,6 +76,9 @@ get_pk_index() {
     }' "$1.meta"
 }
 
+name:type:pk
+value
+
 
 #-------------------------- DB Functions ----------------------------------
 
@@ -139,10 +142,6 @@ insertIntoTable(){
             return
         fi
         choice=$(zenity --list --title="Choose a table" --text="Select a table from database:" --column="Tables"  $TABLES --width=300 --height=200)
-        if [ -z "$choice" ]; then
-            zenity --error --text="No table selected!" --width=300
-            return
-        fi
           
         declare -i numberOfColumn
         numberOfColumn=$(awk -F: '{print $2}' "$choice.meta" | head -n 1)
@@ -169,6 +168,7 @@ insertIntoTable(){
                     then
                         :
                     else
+                    
                         zenity --error --text="Primary key value '$value' already exists!"
                         continue
                     fi
@@ -181,18 +181,14 @@ insertIntoTable(){
         zenity --info --text="Record inserted successfully into table '$choice'." --width=300
 }
 selectFromTable(){
-        SCRIPT_NAME="$(basename "$0")"
-        SCRIPT_NAME="${SCRIPT_NAME%.*}"
+        zenity --info --text="Selected Select From Table Function" --width=300
         TABLES=$(ls *.meta 2>/dev/null | sed 's/.meta//')
         if [ -z "$TABLES" ]; then
             zenity --error --text="No tables found! Please create a table first." --width=300
             return
         fi
         choice=$(zenity --list --title="Choose a table" --text="Select a table from database:" --column="Tables" $TABLES --width=300 --height=200)
-        if [ -z "$choice" ]; then
-            zenity --error --text="No table selected!" --width=300
-            return
-        fi
+        [[ $? -ne 0 ]] && return
         pk_index=$(get_pk_index "$choice")
             if [[ -z "$pk_index" ]]; then
                 zenity --error --text="No Primary Key defined for table '$choice'. Update operation requires a Primary Key." --width=300
@@ -227,10 +223,6 @@ deleteFromTable(){
             return
         fi
         choice=$(zenity --list --title="Choose a table" --text="Select a table from database:" --column="Tables" $TABLES --width=300 --height=200)
-        if [ -z "$choice" ]; then
-            zenity --error --text="No table selected!" --width=300
-            return
-        fi
         if [[ ! -s "$choice.data" ]]; then
                         zenity --error --title="Error"  --text="Table '$choice' is empty or does not exist."
                         else
@@ -270,18 +262,12 @@ deleteFromTable(){
 updateTable(){
 
             zenity --info --text="Selected Update Table Function" --width=300
-            SCRIPT_NAME="$(basename "$0")"
-            SCRIPT_NAME="${SCRIPT_NAME%.*}"
             TABLES=$(ls *.meta 2>/dev/null | sed 's/.meta//')
             if [ -z "$TABLES" ]; then
                 zenity --error --text="No tables found! Please create a table first." --width=300
                 return
             fi
             choice=$(zenity --list --title="Choose a table" --text="Select a table from database:" --column="Tables" $TABLES --width=300 --height=200)
-            if [ -z "$choice" ]; then
-                zenity --error --text="No table selected!" --width=300
-                return
-            fi
             if [[ ! -s "$choice.data" ]]; then
                             zenity --error --title="Error"  --text="Table '$choice' is empty or does not exist."
                             else
