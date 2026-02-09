@@ -17,14 +17,14 @@ createDB(){
       fi
    fi
 }
-
+createDB
 
 listDB(){
     dbs=$(ls -d */ 2>/dev/null | sed 's:/: :g')
    if [ -z "$dbs" ]; then
       zenity --info --text="No databases found!" --width=300
    else
-      dbs=$(ls -d */ | sed 's:/*$::')
+      
       zenity --list --title="List of Databases" --column="Databases" $dbs --width=300
    fi
 }
@@ -83,10 +83,13 @@ create_table() {
 
 
 
-
      colNums=$(zenity --entry --title="Create Table" --text="Enter Numbers of Columns")
       [[ $? -ne 0 ]] && return
-
+        if ! [[ "$colNums" =~ ^[1-9][0-9]*$ ]]; then
+            zenity --error --text="Please enter a valid positive integer for the number of columns." --width=300
+            return
+        fi
+         echo "NumberOfColumns:$colNums" >> $tableName.meta
 
      for((i=1;i<=$colNums;i++));do
 
@@ -115,5 +118,182 @@ create_table() {
       zenity --info --text="$tableName Table created." --width=300
 
 }
+insertIntoTable(){
+        SCRIPT_NAME="$(basename "$0")"
+        SCRIPT_NAME="${SCRIPT_NAME%.*}"
+        TABLES=$(ls *.meta 2>/dev/null | sed 's/.meta//')
+        if [ -z "$TABLES" ]; then
+            zenity --error --text="No tables found! Please create a table first." --width=300
+            return
+        fi
+        choice=$(zenity --list --title="Choose a table" --text="Select a table from database:" --column="Tables"  $TABLES --width=300 --height=200)
+        if [ -z "$choice" ]; then
+            zenity --error --text="No table selected!" --width=300
+            return
+        fi
+         # Call the insert function for the selected table
+        insertIntoTable "$choice"   
+        declare -i numberOfColumn
+        numberOfColumn=$(awk -F: '{print $2}' "$choice.meta" | head -n 1)
+        # echo "$colName:$colType:PK" >> $tableName.meta
+        for ((i=1;i<=numberOfColumn;i++));do
+            colName=$(awk -F: 'NR=='$((i+1))'{print $1}' "$choice.meta")
+            colType=$(awk -F: 'NR=='$((i+1))'{print $2}' "$choice.meta")
+            isPK=$(awk -F: 'NR=='$((i+1))'{print $3}' "$choice.meta")
+            while true; do
+                value=$(zenity --entry --title="Insert Into Table" --text="Enter value for column '$colName' (Type: $colType)")
+                [[ $? -ne 0 ]] && return
+                if [[ -z "$value" ]]; then
+                    zenity --error --text="Value cannot be empty!" --width=300
+                    continue
+                fi
+                if [[ "$colType" == "INT" && ! "$value" =~ ^-?[0-9]+$ ]]; then
+                    zenity --error --text="Please enter a valid integer for column '$colName'." --width=300
+                    continue
+                fi
+                if [[ "$isPK" == "PK" ]]; then
+                    if grep -q "^$value:" "$choice.data"; then
+                        zenity --error --text="Primary key value '$value' already exists in column '$colName'." --width=300
+                        continue
+                    fi
+                fi
+                echo -n "$value:" >> "$choice.data"
+                break
+            done
+        done
+        echo "" >> "$choice.data"
+        zenity --info --text="Record inserted successfully into table '$choice'." --width=300
+}
+selectFromTable(){
+        SCRIPT_NAME="$(basename "$0")"
+        SCRIPT_NAME="${SCRIPT_NAME%.*}"
+        TABLES=$(ls *.meta 2>/dev/null | sed 's/.meta//')
+        if [ -z "$TABLES" ]; then
+            zenity --error --text="No tables found! Please create a table first." --width=300
+            return
+        fi
+        choice=$(zenity --list --title="Choose a table" --text="Select a table from database:" --column="Tables" $TABLES --width=300 --height=200)
+        if [ -z "$choice" ]; then
+            zenity --error --text="No table selected!" --width=300
+            return
+        fi
+         value=$(zenity --entry --title="Enter Value you search for " --text="Enter value to search for (leave empty to select all records)")
+                [[ $? -ne 0 ]] && return
+                if [[ -z "$value" ]]; then
+                if [[ ! -s "$choice.data" ]]; then
+                        zenity --error --title="Error"  --text="Table '$choice' is empty or does not exist."
+                        else
+                        column -t -s ':' "$choice.data" | zenity --text-info --title="Table: $choice" --width=500 --height=300
+                        fi
+                else
+                    results=$(grep "$value" "$choice.data")
+                    if [[ -z "$results" ]]; then
+                        zenity --info --text="No records found with value '$value' in table '$choice'." --width=300
+                    else
+                        zenity --info --text="Records found with value '$value' in table '$choice':" --width=300
+                        echo "$results" | column -t -s ':'
+                    fi
+
+                fi
+
+    
+}
+deleteFromTable(){
+                
+        zenity --info --text="Selected Delete From Table Function" --width=300
+        SCRIPT_NAME="$(basename "$0")"
+        SCRIPT_NAME="${SCRIPT_NAME%.*}"
+        TABLES=$(ls *.meta 2>/dev/null | sed 's/.meta//')
+        if [ -z "$TABLES" ]; then
+            zenity --error --text="No tables found! Please create a table first." --width=300
+            return
+        fi
+        choice=$(zenity --list --title="Choose a table" --text="Select a table from database:" --column="Tables" $TABLES --width=300 --height=200)
+        if [ -z "$choice" ]; then
+            zenity --error --text="No table selected!" --width=300
+            return
+        fi
+        if [[ ! -s "$choice.data" ]]; then
+                        zenity --error --title="Error"  --text="Table '$choice' is empty or does not exist."
+                        else
+                        column -t -s ':' "$choice.data" | zenity --text-info --title="Table: $choice" --width=500 --height=300
+                        fi
+         value=$(zenity --entry --title="Enter Value you search for to delete " --text="Enter value to search for deletion (leave empty to delete all records)")
+                [[ $? -ne 0 ]] && return
+                if [[ -z "$value" ]]; then
+                if [[ ! -s "$choice.data" ]]; then
+                        zenity --error --title="Error"  --text="Table '$choice' is empty or does not exist."
+                        else
+                        > "$choice.data"
+                        zenity --info --text="All records deleted from table '$choice'." --width=300
+                        fi
+                else
+                    results=$(grep "$value" "$choice.data")
+                    if [[ -z "$results" ]]; then
+                        zenity --info --text="No records found with value '$value' in table '$choice'." --width=300
+                    else
+                        grep -v "$value" "$choice.data" > temp.data && mv temp.data "$choice.data"
+                        zenity --info --text="Records with value '$value' deleted from table '$choice'." --width=300
+                    fi
+
+                fi
+   #taht will delete all records that match the value entered by the user. If the user leaves the input empty, it will delete all records from the selected table.
+   #ask if the user want to delete all records if the input is empty
+
+}
+updateTable(){
+
+            zenity --info --text="Selected Update Table Function" --width=300
+            SCRIPT_NAME="$(basename "$0")"
+            SCRIPT_NAME="${SCRIPT_NAME%.*}"
+            TABLES=$(ls *.meta 2>/dev/null | sed 's/.meta//')
+            if [ -z "$TABLES" ]; then
+                zenity --error --text="No tables found! Please create a table first." --width=300
+                return
+            fi
+            choice=$(zenity --list --title="Choose a table" --text="Select a table from database:" --column="Tables" $TABLES --width=300 --height=200)
+            if [ -z "$choice" ]; then
+                zenity --error --text="No table selected!" --width=300
+                return
+            fi
+            if [[ ! -s "$choice.data" ]]; then
+                            zenity --error --title="Error"  --text="Table '$choice' is empty or does not exist."
+                            else
+                            column -t -s ':' "$choice.data" | zenity --text-info --title="Table: $choice" --width=500 --height=300
+                            fi
+                value=$(zenity --entry --title="Enter Value you search for to update " --text="Enter value to search for update")
+                [[ $? -ne 0 ]] && return
+                if [[ -z "$value" ]]; then
+                        zenity --error --text="No value entered!" --width=300
+                        return
+                fi
+                
+                
+                    results=$(grep "$value" "$choice.data")
+                    if [[ -z "$results" ]]; then
+                        zenity --info --text="No records found with value '$value' in table '$choice'." --width=300
+                    else
+                    echo "$results" | column -t -s ':' | zenity --text-info --title="Records to be updated" --width=500 --height=300
+                        #Ask user for new value    
+                        new_value=$(zenity --entry --title="New value" --text="Enter new value to replace '$value'")
+                        [[ $? -ne 0 ]] && return
+
+                        if [[ -z "$new_value" ]]; then
+                            zenity --error --text="No new value entered!"
+                            return
+                        fi
+
+                        # 5) تنفيذ التحديث فعليًا (آمن)
+                        sed "s/$value/$new_value/g" "$choice.data" > temp.data && mv temp.data "$choice.data"
+                                 
+                        zenity --info --text="Records updated successfully in table '$choice'." --width=300 
+                    fi  
+
+}                 
 
 #-------------------------- Main Menu ----------------------------------
+#ناقص كد 
+#Insert Into Table و  DONE 
+#Select From Table   و DONE
+#Delete From Table و DONE
+#Update Table DONE
