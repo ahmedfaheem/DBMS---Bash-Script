@@ -119,8 +119,8 @@ create_table() {
 
 }
 insertIntoTable(){
-        SCRIPT_NAME="$(basename "$0")"
-        SCRIPT_NAME="${SCRIPT_NAME%.*}"
+       # SCRIPT_NAME="$(basename "$0")"
+       # SCRIPT_NAME="${SCRIPT_NAME%.*}"
         TABLES=$(ls *.meta 2>/dev/null | sed 's/.meta//')
         if [ -z "$TABLES" ]; then
             zenity --error --text="No tables found! Please create a table first." --width=300
@@ -132,7 +132,7 @@ insertIntoTable(){
             return
         fi
          # Call the insert function for the selected table
-        insertIntoTable "$choice"   
+          
         declare -i numberOfColumn
         numberOfColumn=$(awk -F: '{print $2}' "$choice.meta" | head -n 1)
         # echo "$colName:$colType:PK" >> $tableName.meta
@@ -191,7 +191,7 @@ selectFromTable(){
                         zenity --info --text="No records found with value '$value' in table '$choice'." --width=300
                     else
                         zenity --info --text="Records found with value '$value' in table '$choice':" --width=300
-                        echo "$results" | column -t -s ':'
+                        echo "$results" | column -t -s ':' | zenity --text-info --title="Search Results" --width=500 --height=300
                     fi
 
                 fi
@@ -224,8 +224,11 @@ deleteFromTable(){
                 if [[ ! -s "$choice.data" ]]; then
                         zenity --error --title="Error"  --text="Table '$choice' is empty or does not exist."
                         else
-                        > "$choice.data"
-                        zenity --info --text="All records deleted from table '$choice'." --width=300
+                        zenity --question --text="Are you sure you want to delete all records from table '$choice'?" --width=300
+                        if [[ $? -eq 0 ]]; then
+                                > "$choice.data"
+                                zenity --info --text="All records deleted from table '$choice'." --width=300
+                        fi  
                         fi
                 else
                     results=$(grep "$value" "$choice.data")
@@ -282,18 +285,9 @@ updateTable(){
                             zenity --error --text="No new value entered!"
                             return
                         fi
-
-                        # 5) تنفيذ التحديث فعليًا (آمن)
                         sed "s/$value/$new_value/g" "$choice.data" > temp.data && mv temp.data "$choice.data"
                                  
                         zenity --info --text="Records updated successfully in table '$choice'." --width=300 
                     fi  
 
 }                 
-
-#-------------------------- Main Menu ----------------------------------
-#ناقص كد 
-#Insert Into Table و  DONE 
-#Select From Table   و DONE
-#Delete From Table و DONE
-#Update Table DONE
