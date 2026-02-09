@@ -226,9 +226,9 @@ deleteFromTable(){
                         else
                         zenity --question --text="Are you sure you want to delete all records from table '$choice'?" --width=300
                         if [[ $? -eq 0 ]]; then
-                                > "$choice.data"
-                                zenity --info --text="All records deleted from table '$choice'." --width=300
-                        fi  
+                        > "$choice.data"
+                        zenity --info --text="All records deleted from table '$choice'." --width=300
+                        fi
                         fi
                 else
                     results=$(grep "$value" "$choice.data")
@@ -291,3 +291,8 @@ updateTable(){
                     fi  
 
 }                 
+
+
+
+
+main{}
