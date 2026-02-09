@@ -64,6 +64,17 @@ connectDB(){
     fi
 }
 
+#-------------------------- helper functions ----------------------------------
+get_pk_index() {
+    awk -F: '{
+        for (i=1; i<=NF; i+=3) {
+            if ($(i+2)=="YES") {
+                print (i+2)/3
+                exit
+            }
+        }
+    }' "$1.meta"
+}
 
 
 #-------------------------- DB Functions ----------------------------------
@@ -110,18 +121,18 @@ create_table() {
        [[ $? -ne 0 ]] && rm "$tableName.meta" && return
 
       if [[ $isPK == "YES" ]];then
-         echo "$colName:$colType:PK" >> $tableName.meta
+         echo -n "$colName:$colType:YES:" >> $tableName.meta
       else
-         echo "$colName:$colType" >> $tableName.meta
+         echo  -n "$colName:$colType:NO:" >> $tableName.meta
       fi
+
      done
          touch "$tableName.data"
       zenity --info --text="$tableName Table created." --width=300
 
 }
 insertIntoTable(){
-       # SCRIPT_NAME="$(basename "$0")"
-       # SCRIPT_NAME="${SCRIPT_NAME%.*}"
+        zenity --info --text="Selected Insert Into Table Function" --width=300
         TABLES=$(ls *.meta 2>/dev/null | sed 's/.meta//')
         if [ -z "$TABLES" ]; then
             zenity --error --text="No tables found! Please create a table first." --width=300
@@ -132,15 +143,15 @@ insertIntoTable(){
             zenity --error --text="No table selected!" --width=300
             return
         fi
-         # Call the insert function for the selected table
           
         declare -i numberOfColumn
         numberOfColumn=$(awk -F: '{print $2}' "$choice.meta" | head -n 1)
-        # echo "$colName:$colType:PK" >> $tableName.meta
-        for ((i=1;i<=numberOfColumn;i++));do
-            colName=$(awk -F: 'NR=='$((i+1))'{print $1}' "$choice.meta")
-            colType=$(awk -F: 'NR=='$((i+1))'{print $2}' "$choice.meta")
-            isPK=$(awk -F: 'NR=='$((i+1))'{print $3}' "$choice.meta")
+        total_fields=$((numberOfColumn * 3))
+        columns_line=$(sed -n '2p' "$choice.meta")
+        for ((i=1; i<=total_fields; i+=3)); do
+            colName=$(awk -F: -v n=$i '{print $n}' <<< "$columns_line")
+            colType=$(awk -F: -v n=$((i+1)) '{print $n}' <<< "$columns_line")
+            isPK=$(awk -F: -v n=$((i+2)) '{print $n}' <<< "$columns_line")
             while true; do
                 value=$(zenity --entry --title="Insert Into Table" --text="Enter value for column '$colName' (Type: $colType)")
                 [[ $? -ne 0 ]] && return
@@ -152,9 +163,13 @@ insertIntoTable(){
                     zenity --error --text="Please enter a valid integer for column '$colName'." --width=300
                     continue
                 fi
-                if [[ "$isPK" == "PK" ]]; then
-                    if grep -q "^$value:" "$choice.data"; then
-                        zenity --error --text="Primary key value '$value' already exists in column '$colName'." --width=300
+                if [[ "$isPK" == "YES" ]]; then
+                    pk_index=$(get_pk_index "$choice")
+                    if awk -F: -v pk="$value" -v idx="$pk_index" '$idx == pk { exit 1 }' "$choice.data"
+                    then
+                        :
+                    else
+                        zenity --error --text="Primary key value '$value' already exists!"
                         continue
                     fi
                 fi
@@ -178,32 +193,34 @@ selectFromTable(){
             zenity --error --text="No table selected!" --width=300
             return
         fi
-         value=$(zenity --entry --title="Enter Value you search for " --text="Enter value to search for (leave empty to select all records)")
+        pk_index=$(get_pk_index "$choice")
+            if [[ -z "$pk_index" ]]; then
+                zenity --error --text="No Primary Key defined for table '$choice'. Update operation requires a Primary Key." --width=300
+                return
+            fi  
+            pk_value=$(zenity --entry --title="Search by Primary Key" --text="Enter Primary Key value to search for (leave empty to select all records) ")
                 [[ $? -ne 0 ]] && return
-                if [[ -z "$value" ]]; then
+            if [[ -z "$pk_value" ]]; then
                 if [[ ! -s "$choice.data" ]]; then
                         zenity --error --title="Error"  --text="Table '$choice' is empty or does not exist."
-                        else
-                        column -t -s ':' "$choice.data" | zenity --text-info --title="Table: $choice" --width=500 --height=300
-                        fi
                 else
-                    results=$(grep "$value" "$choice.data")
-                    if [[ -z "$results" ]]; then
-                        zenity --info --text="No records found with value '$value' in table '$choice'." --width=300
-                    else
-                        zenity --info --text="Records found with value '$value' in table '$choice':" --width=300
-                        echo "$results" | column -t -s ':' | zenity --text-info --title="Search Results" --width=500 --height=300
-                    fi
-
+                        column -t -s ':' "$choice.data" | zenity --text-info --title="Table: $choice" --width=500 --height=300
                 fi
-
+            else
+                results=$(awk -F: -v pk="$pk_value" -v idx="$pk_index" '$idx == pk' "$choice.data")
+                        if [[ -z "$results" ]]; then
+                            zenity --info --text="No records found with Primary Key value '$pk_value' in table '$choice'." --width=300
+                            return
+                        else
+                            zenity --info --text="Records found with Primary Key value '$pk_value' in table '$choice':" --width=300
+                            echo "$results" | column -t -s ':' | zenity --text-info --title="Search Results" --width=500 --height=300
+                        fi
+            fi
     
 }
 deleteFromTable(){
                 
         zenity --info --text="Selected Delete From Table Function" --width=300
-        SCRIPT_NAME="$(basename "$0")"
-        SCRIPT_NAME="${SCRIPT_NAME%.*}"
         TABLES=$(ls *.meta 2>/dev/null | sed 's/.meta//')
         if [ -z "$TABLES" ]; then
             zenity --error --text="No tables found! Please create a table first." --width=300
@@ -219,10 +236,18 @@ deleteFromTable(){
                         else
                         column -t -s ':' "$choice.data" | zenity --text-info --title="Table: $choice" --width=500 --height=300
                         fi
-         value=$(zenity --entry --title="Enter Value you search for to delete " --text="Enter value to search for deletion (leave empty to delete all records)")
-                [[ $? -ne 0 ]] && return
-                if [[ -z "$value" ]]; then
-                if [[ ! -s "$choice.data" ]]; then
+        
+        pk_index=$(get_pk_index "$choice")
+
+        if [[ -z "$pk_index" ]]; then
+            zenity --error --text="No Primary Key defined for table '$choice'."
+            return
+        fi
+
+        pk_value=$(zenity --entry --title="Delete by Primary Key" --text="Enter Primary Key value to delete (leave empty to delete all records)")
+        [[ $? -ne 0 ]] && return
+        if [[ -z "$pk_value" ]]; then
+           if [[ ! -s "$choice.data" ]]; then
                         zenity --error --title="Error"  --text="Table '$choice' is empty or does not exist."
                         else
                         zenity --question --text="Are you sure you want to delete all records from table '$choice'?" --width=300
@@ -230,20 +255,17 @@ deleteFromTable(){
                         > "$choice.data"
                         zenity --info --text="All records deleted from table '$choice'." --width=300
                         fi
-                        fi
-                else
-                    results=$(grep "$value" "$choice.data")
-                    if [[ -z "$results" ]]; then
-                        zenity --info --text="No records found with value '$value' in table '$choice'." --width=300
-                    else
-                        grep -v "$value" "$choice.data" > temp.data && mv temp.data "$choice.data"
-                        zenity --info --text="Records with value '$value' deleted from table '$choice'." --width=300
-                    fi
-
-                fi
-   #taht will delete all records that match the value entered by the user. If the user leaves the input empty, it will delete all records from the selected table.
-   #ask if the user want to delete all records if the input is empty
-
+            fi
+        else
+            results=$(awk -F: -v pk="$pk_value" -v idx="$pk_index" '$idx == pk' "$choice.data")
+            if [[ -z "$results" ]]; then
+                zenity --info --text="No records found with Primary Key value '$pk_value' in table '$choice'." --width=300
+            else
+                awk -F: -v pk="$pk_value" -v idx="$pk_index" '$idx != pk' "$choice.data" > temp.data && mv temp.data "$choice.data"           
+                zenity --info --text="Record with Primary Key value '$pk_value' deleted from table '$choice'." --width=300
+            fi  
+        fi
+       
 }
 updateTable(){
 
@@ -265,32 +287,55 @@ updateTable(){
                             else
                             column -t -s ':' "$choice.data" | zenity --text-info --title="Table: $choice" --width=500 --height=300
                             fi
-                value=$(zenity --entry --title="Enter Value you search for to update " --text="Enter value to search for update")
+            pk_index=$(get_pk_index "$choice")
+            if [[ -z "$pk_index" ]]; then
+                zenity --error --text="No Primary Key defined for table '$choice'. Update operation requires a Primary Key." --width=300
+                return
+            fi  
+            pk_value=$(zenity --entry --title="Update by Primary Key" --text="Enter Primary Key value to update")
                 [[ $? -ne 0 ]] && return
-                if [[ -z "$value" ]]; then
-                        zenity --error --text="No value entered!" --width=300
-                        return
-                fi
-                
-                
-                    results=$(grep "$value" "$choice.data")
-                    if [[ -z "$results" ]]; then
-                        zenity --info --text="No records found with value '$value' in table '$choice'." --width=300
-                    else
-                    echo "$results" | column -t -s ':' | zenity --text-info --title="Records to be updated" --width=500 --height=300
-                        #Ask user for new value    
-                        new_value=$(zenity --entry --title="New value" --text="Enter new value to replace '$value'")
-                        [[ $? -ne 0 ]] && return
-
-                        if [[ -z "$new_value" ]]; then
-                            zenity --error --text="No new value entered!"
+            if [[ -z "$pk_value" ]]; then
+                zenity --error --text="Primary Key value cannot be empty for update operation." --width=300
+                return
+            fi
+                results=$(awk -F: -v pk="$pk_value" -v idx="$pk_index" '$idx == pk' "$choice.data")
+                        if [[ -z "$results" ]]; then
+                            zenity --info --text="No records found with Primary Key value '$pk_value' in table '$choice'." --width=300
                             return
-                        fi
-                        sed "s/$value/$new_value/g" "$choice.data" > temp.data && mv temp.data "$choice.data"
-                                 
-                        zenity --info --text="Records updated successfully in table '$choice'." --width=300 
-                    fi  
+                        else
+                            echo "$results" | column -t -s ':' | zenity --text-info --title="Record to be updated" --width=500 --height=300
+                             value=$(zenity --entry --title="Enter Value you search for to update " --text="Enter value to search for update")
+                             [[ $? -ne 0 ]] && return
+                            if [[ -z "$value" ]]; then
+                            zenity --error --text="No value entered!" --width=300
+                            return
+                            fi
+                              #Ask user for new value    
+                             new_value=$(zenity --entry --title="New value" --text="Enter new value to replace '$value'")
+                              [[ $? -ne 0 ]] && return
 
+                             if [[ -z "$new_value" ]]; then
+                                 zenity --error --text="No new value entered!"
+                                 return
+                             fi
+                                awk -F: -v OFS=: \
+                                    -v pk="$pk_value" \
+                                    -v idx="$pk_index" \
+                                    -v old="$value" \
+                                    -v new="$new_value" '
+                                {
+                                    if ($idx == pk) {
+                                        for (i = 1; i <= NF; i++) {
+                                            if ($i == old) {
+                                                $i = new
+                                            }
+                                        }
+                                    }
+                                    print
+                                }' "$choice.data" > temp.data && mv temp.data "$choice.data"
+                                 
+                            zenity --info --text="Records updated successfully in table '$choice'." --width=300 
+                        fi
 }                 
 
 
