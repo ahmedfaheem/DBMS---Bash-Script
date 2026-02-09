@@ -1,0 +1,4 @@
+NumberOfColumns:3
+id:INT:PK
+name:STRING
+age:INT

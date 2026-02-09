@@ -17,15 +17,15 @@ createDB(){
       fi
    fi
 }
-createDB
+
 
 listDB(){
     dbs=$(ls -d */ 2>/dev/null | sed 's:/: :g')
    if [ -z "$dbs" ]; then
       zenity --info --text="No databases found!" --width=300
    else
-      
-      zenity --list --title="List of Databases" --column="Databases" $dbs --width=300
+    
+      zenity --info --title="List of Databases" --text="$dbs" --width=300
    fi
 }
 
@@ -55,7 +55,8 @@ connectDB(){
         if [ -d "$name" ]; then
             cd "$name"
             zenity --info --text="Connected to database $name" --width=300
-            ## Display database menu here
+            tableOperationsMenu
+            cd ..
         else
             zenity --error --text="Database $name does not exist!" --width=300
             return
@@ -294,5 +295,77 @@ updateTable(){
 
 
 
+tableOperationsMenu(){
 
-main{}
+ while true; do
+ choice=$(zenity --list --title="Table Operations" --text="Select an option:" --column="Options"\
+   "Create Table" \
+   "Insert Into Table" \
+   "Select From Table" \
+   "Delete From Table" \
+   "Update Table" \
+   "Back to Main Menu" --width=400 --height=400) || exit
+
+    case $choice in
+        "Create Table")
+            create_table
+            ;;
+        "Insert Into Table")
+            insertIntoTable
+            ;;
+        "Select From Table")
+            selectFromTable
+            ;;
+        "Delete From Table")
+            deleteFromTable
+            ;;
+        "Update Table")
+            updateTable
+            ;;
+        "Back to Main Menu")
+            return
+            ;;
+        *)
+            zenity --error --text="Invalid option selected!" --width=300
+            ;;
+    esac
+    done;
+}
+
+main(){
+
+   while true; do
+   choice=$(zenity --list --title="Database Management System" --text="Select an option:" --column="Options" \
+   "Create Database" \
+   "List Databases" \
+   "Drop Database" \
+   "Connect to Database" \
+   "Exit" --width=400 --height=400) || exit
+
+   case $choice in
+      "Create Database")
+         createDB
+         ;;
+      "List Databases")
+         listDB
+         ;;
+      "Drop Database")
+         dropDB
+         ;;
+      "Connect to Database")
+         connectDB
+         ;;
+      "Exit")
+         exit 0
+         ;;
+      *)
+         zenity --error --text="Invalid option selected!" --width=300
+         ;;
+   esac
+
+   done;
+
+}
+
+#calling main function
+main
